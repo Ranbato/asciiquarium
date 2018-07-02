@@ -1,0 +1,23 @@
+plugins {
+    id 'java'
+}
+
+group 'ranbato.term'
+version '1.0-SNAPSHOT'
+
+sourceCompatibility = 1.8
+
+repositories {
+    mavenCentral()
+}
+
+dependencies {
+    compile group: 'com.googlecode.lanterna', name: 'lanterna', version: '3.0.1'
+
+    // Beta Java 9 support
+    compile group: 'org.slf4j', name: 'slf4j-api', version: '1.8.0+'
+    compile group: 'ch.qos.logback', name: 'logback-classic', version: '1.3.0+'
+
+
+    testCompile group: 'junit', name: 'junit', version: '4.12'
+}
