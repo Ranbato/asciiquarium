@@ -148,6 +148,12 @@ public class Animation
     Terminal win;
     Screen screen;
     private boolean fullscreen = false;
+
+    public TerminalSize getSize()
+    {
+        return size;
+    }
+
     TerminalSize size;
 
     public Animation() throws IOException
@@ -189,6 +195,10 @@ sub DESTROY {
     public void add_entity(Entity entity)
     {
         entities.add(entity);
+    }
+    public void add_entity(List<Entity> entityList)
+    {
+        entities.addAll(entityList);
     }
 
 // // // // // // // // // // // // // // // // // // // // //  COLOR UTILITIES // // // // // // // // // // // // // // // // // // // // // // // 
@@ -463,7 +473,8 @@ sub DESTROY {
 //	# clear the window before we start redrawing
         screen.clear();
 
-        entities.sort((e1,e2)->Integer.compare(e1.getZ() , e2.getZ()));
+        // Reverse sort so they are drawn in correct order
+        entities.sort((e2,e1)->Integer.compare(e1.getZ() , e2.getZ()));
         for (Entity ent:entities)
         {
             draw_entity(ent);

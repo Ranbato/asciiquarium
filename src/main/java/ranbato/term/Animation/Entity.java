@@ -9,6 +9,7 @@ import java.time.Instant;
 import java.util.Arrays;
 import java.util.LinkedList;
 import java.util.List;
+import java.util.function.Function;
 
 import org.slf4j.*;
 
@@ -161,8 +162,49 @@ public class Entity
     // state
     private int curr_frame = 0;
 
+    private Entity(Builder builder)
+    {
+        setName(builder.name);
+        setTransparent(builder.transparent);
+        auto_trans = builder.auto_trans;
+        setX(builder.x);
+        setY(builder.y);
+        setZ(builder.z);
+        default_color = builder.default_color;
+        background_color = builder.background_color;
+        setDepth(builder.depth);
+        setPhysical(builder.physical);
+        callback_args = builder.callback_args;
+        setWrap(builder.wrap);
+        setFollow_entity(builder.follow_entity);
+        setFollow_offset(builder.follow_offset);
+//        setCurr_frame(builder.curr_frame);
+        setCollisions(builder.collisions);
+        setDie_offscreen(builder.die_offscreen);
+        setDie_time(builder.die_time);
+        setDie_frame(builder.die_frame);
+        setDeath_cb(builder.death_cb);
+        setDie_entity(builder.die_entity);
+        setType(builder.type);
+        setData(builder.data);
 
-    private class AnimationPath {
+        // Do these last
+        setShape(builder.shape);
+        if(builder.colorMask != null)
+        {
+            build_mask(builder.colorMask);
+        }
+
+    }
+
+    public static Builder newBuilder()
+    {
+        return new Builder();
+    }
+
+
+
+    private static class AnimationPath {
         private int frame = -1;
         private float [][] path;
 
@@ -187,6 +229,13 @@ public class Entity
             return frame == -1?path[0]:path[frame];
         }
 
+
+        public void setPath(float dx, float dy, float dz, float speed){
+            setPath(new float[][]{{dx,dy,dz,speed}});
+        }  public void setPath(float [] path){
+            setPath(new float[][]{path});
+        }
+
         public void setPath(float[][] path)
         {
             this.path = path;
@@ -197,7 +246,7 @@ public class Entity
     public Entity(String name, String shape, String colorMask, String default_color)
     {
         this.name = name;
-        this.shape = build_shape(shape);
+        setShape(shape);
         this.colorMask = build_mask(colorMask);
     }
 
@@ -223,7 +272,7 @@ public class Entity
     private boolean die_offscreen = false;
     private Instant die_time;
     private int die_frame;
-    private MethodHandle death_cb;
+    private Function<Object [],Entity> death_cb;
     private Entity die_entity;
 
     //misc
@@ -545,12 +594,12 @@ public class Entity
         this.die_frame = die_frame;
     }
 
-    public MethodHandle getDeath_cb()
+    public Function<Object [],Entity> getDeath_cb()
     {
         return death_cb;
     }
 
-    public void setDeath_cb(MethodHandle death_cb)
+    public void setDeath_cb(Function<Object [],Entity> death_cb)
     {
         this.death_cb = death_cb;
     }
@@ -660,19 +709,6 @@ public class Entity
 
 
 //
-//=cut
-//sub shape {
-//	my $self = shift;
-//	if(@_) {
-//		my $shape = shift;
-//		if($self->{AUTO_TRANS}) {
-//			$shape = _auto_trans($shape, $self->{TRANSPARENT});
-//		}
-//		($self->{SHAPE},$self->{HEIGHT},$self->{WIDTH}) = $self->_build_shape($shape);
-//	}
-//}
-//
-//
 //=item I<animation>
 //
 //  $entity->animation( $anim );
@@ -760,6 +796,7 @@ public int []  move_entity(Animation anim) {
         else
         {
             logger.error("mask and original are null ");
+            return null;
         }
 
         // make sure mask is same size as shape
@@ -811,6 +848,17 @@ public int []  move_entity(Animation anim) {
             mask = newmask;
         }
 
+        colorMask = mask;
+        updateDrawCache();
+
+
+        return mask;
+    }
+
+    private void updateDrawCache()
+    {
+        boolean transColor = false;
+
         // update drawcache
         drawCache = new TextCharacter[getShape().length][height][width];
         for (int f = 0; f < drawCache.length; f++)
@@ -820,25 +868,32 @@ public int []  move_entity(Animation anim) {
                 for (int j = 0; j < width; j++)
                 {
 
-                    if(j>= this.shape[f][i].length){
+                    if(i >= this.shape[f].length || j>= this.shape[f][i].length){
                         // make this transparent?
                         drawCache[f][i][j] = null;
                         continue;
                     }
                     TextColor color = default_color;
-                    if (mask[f][i][j] != ' ' && mask[f][i][j] != '\u0000')
+                    if (colorMask != null && colorMask[f][i][j] != ' ' && colorMask[f][i][j] != '\u0000')
                     {
                         // make sure it's a valid color
-                        color = Animation.COLOR_MAP.get(Character.toString(mask[f][i][j]).toUpperCase());
-                        if (color == null)
-                        {
-                            logger.error("Invalid color mask: [{}][{}][{}]:'{}'", f, i, j, mask[f][i][j]);
-                            color = default_color;
+                        color = Animation.COLOR_MAP.get(Character.toString(colorMask[f][i][j]).toUpperCase());
+                        if(color ==  null){
+                            if(colorMask[f][i][j] == transparent){
+                                // make this transparent
+                                drawCache[f][i][j] = null;
+                                continue;
+                            }
+                            else
+                            {
+                                logger.error("Invalid color mask: [{}][{}][{}]:'{}'", f, i, j, colorMask[f][i][j]);
+                                color = default_color;
+                            }
                         }
                     }
-
                         // capital letters indicate bold colors
-                        if (Character.isUpperCase(mask[f][i][j]))
+
+                        if (colorMask != null && Character.isUpperCase(colorMask[f][i][j]))
                         {
                             drawCache[f][i][j] = new TextCharacter(this.shape[f][i][j], color, background_color, SGR.BOLD);
                         }
@@ -851,11 +906,6 @@ public int []  move_entity(Animation anim) {
                     }
                 }
             }
-
-
-
-
-        return mask;
     }
 
 
@@ -877,11 +927,32 @@ public int []  move_entity(Animation anim) {
             }
     }
 
-    private char[][][] build_shape(String myShape)
+    private void setShape(String myShape)
     {
-        return build_shape(myShape, true);
+        setShape(myShape,true);
+
     }
 
+    private void setShape(String myShape, boolean setSize)
+    {
+        shape = build_shape(myShape, setSize);
+        if(auto_trans){
+            auto_trans();
+        }
+        updateDrawCache();
+
+    }
+
+
+
+
+    private void setShape(String[] myShape, boolean setSize){
+        shape = build_shape(myShape, setSize);
+        if(auto_trans){
+            auto_trans();
+        }
+        updateDrawCache();
+    }
     /**
      * take one of 1) a string 2) an array of strings 3) an array of 2D arrays
      * use these to generate a shape in the format we want (which is #3 above)
@@ -897,12 +968,13 @@ public int []  move_entity(Animation anim) {
             width = size.getWidth();
             height = size.getHeight();
         }
+
         return result;
     }
 
-    private char[][][] build_shape(String[] myShape)
+    private void setShape(String[] myShape)
     {
-        return build_shape(myShape, true);
+        setShape(myShape, true);
     }
 
     private char[][][] build_shape(String[] myShape, boolean setSize)
@@ -982,5 +1054,234 @@ public int []  move_entity(Animation anim) {
     }
 
 
+    public static final class Builder
+    {
+        private String name;
+        // default to single asterisk
+        private String [] shape = {"*"};
+        private char transparent = '?';
+        private boolean auto_trans = false;
+        private int x, y, z;
+        private TextColor default_color = TextColor.ANSI.WHITE;
+        private TextColor background_color = TextColor.ANSI.BLACK;
+        private String colorMask;
+        private int depth = 1;
+        private boolean physical = false;
+        private AnimationPath callback_args;
+        private boolean wrap = false;
+        private Entity follow_entity;
+        private int follow_offset;
+        private int curr_frame = 0;
+        private List<Entity> collisions;
+        private boolean die_offscreen;
+        private Instant die_time;
+        private int die_frame;
+        private Function death_cb;
+        private Entity die_entity;
+        private String type;
+        private String data;
+
+        private Builder()
+        {
+        }
+
+        
+        public Builder withName( String val)
+        {
+            name = val;
+            return this;
+        }
+
+        public Builder withShape( String [] val)
+        {
+            shape = val;
+            return this;
+        }
+        
+        public Builder withShape( String val)
+        {
+            shape = new String[]{val};
+            return this;
+        }
+
+        
+        public Builder withColorMask( String val)
+        {
+            colorMask = val;
+            return this;
+        }
+
+
+        public Builder withTransparent(char val)
+        {
+            transparent = val;
+            return this;
+        }
+
+        
+        public Builder withAuto_trans(boolean val)
+        {
+            auto_trans = val;
+            return this;
+        }
+
+        
+        public Builder withX(int val)
+        {
+            x = val;
+            return this;
+        }
+
+        
+        public Builder withY(int val)
+        {
+            y = val;
+            return this;
+        }
+
+        
+        public Builder withZ(int val)
+        {
+            z = val;
+            return this;
+        }
+
+        
+        public Builder withDefault_color( TextColor val)
+        {
+            default_color = val;
+            return this;
+        }
+
+        
+        public Builder withBackground_color( TextColor val)
+        {
+            background_color = val;
+            return this;
+        }
+
+        
+        public Builder withDepth(int val)
+        {
+            depth = val;
+            return this;
+        }
+
+        
+        public Builder withPhysical(boolean val)
+        {
+            physical = val;
+            return this;
+        }
+
+
+        public Builder withCallback_args( Entity.AnimationPath val)
+        {
+            callback_args = val;
+            return this;
+        }
+        public Builder withCallback_args( float dx, float dy, float dz, float speed)
+        {
+            Entity.AnimationPath val = new Entity.AnimationPath();
+            val.setPath(dx,dy,dz,speed);
+            callback_args = val;
+            return this;
+        }
+
+        
+        public Builder withWrap(boolean val)
+        {
+            wrap = val;
+            return this;
+        }
+
+        
+        public Builder withFollow_entity( Entity val)
+        {
+            follow_entity = val;
+            return this;
+        }
+
+        
+        public Builder withFollow_offset(int val)
+        {
+            follow_offset = val;
+            return this;
+        }
+
+        
+        public Builder withCurr_frame(int val)
+        {
+            curr_frame = val;
+            return this;
+        }
+
+        
+        public Builder withCollisions( List<Entity> val)
+        {
+            collisions = val;
+            return this;
+        }
+
+        
+        public Builder withDie_offscreen(boolean val)
+        {
+            die_offscreen = val;
+            return this;
+        }
+
+        
+        public Builder withDie_time( Instant val)
+        {
+            die_time = val;
+            return this;
+        }
+
+        
+        public Builder withDie_frame(int val)
+        {
+            die_frame = val;
+            return this;
+        }
+
+        
+        public Builder withDeath_cb( Function val)
+        {
+            death_cb = val;
+            return this;
+        }
+
+        
+        public Builder withDie_entity( Entity val)
+        {
+            die_entity = val;
+            return this;
+        }
+
+        
+        public Builder withType( String val)
+        {
+            type = val;
+            return this;
+        }
+
+        
+        public Builder withData( String val)
+        {
+            data = val;
+            return this;
+        }
+
+        public Builder withPosition (int x, int y, int z)
+        {
+            return withX(x).withY(y).withZ(z);
+        }
+
+        
+        public Entity build()
+        {
+            return new Entity(this);
+        }
+    }
 }
 

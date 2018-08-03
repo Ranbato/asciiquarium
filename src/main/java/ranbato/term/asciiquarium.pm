@@ -201,15 +201,17 @@ sub add_all_seaweed {
 }
 
 sub add_seaweed {
+
 	my ($old_seaweed, $anim) = @_;
 	my @seaweed_image = ('','');
-	my $height = int(rand(4)) + 3;
+	my $height = int(rand(4)) + 13;
 	for my $i (1..$height) {
 		my $left_side = $i%2;
 		my $right_side = !$left_side;
 		$seaweed_image[$left_side] .= "(\n";
 		$seaweed_image[$right_side] .= " )\n";
 	}
+    exit;
 	my $x = int(rand($anim->width()-2)) + 1;
 	my $y = $anim->height() - $height;
 	my $anim_speed = rand(.05) + .25;
